@@ -3,6 +3,9 @@
 `target-mysql` is a Singer tap for MySQL based on the code from MSSQL target and ODBC. It should work for other ODBC targets that have a driver.  
 See here for list https://github.com/davidski/database_connections
 
+**Note**: While testing, there have been issues with using `mariadb-connector-odbc@3.1.13` for older versions of MySQL.
+To get around this, use `3.1.12` - [related issue](https://jira.mariadb.org/browse/ODBC-328)
+
 Installation instructions on Mac:
 1. `brew install mariadb`
 2. `brew services list`

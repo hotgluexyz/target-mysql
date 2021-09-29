@@ -60,7 +60,7 @@ class MSSQLStream(Stream):
     #TODO better system for detecting tables
     
     #TODO Need be using named parameters for SQL to avoid potential injection, and to be clean
-    sql = f"CREATE OR REPLACE TABLE {table_name}("
+    sql = f"CREATE TABLE {table_name}("
    
     #Key Properties
     #TODO can you assume only 1 primary key?
