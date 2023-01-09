@@ -15,7 +15,7 @@ class TargetMSSQL(Target):
     def __init__(self, config, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
         assert self.config["host"]
-        # print(pyodbc.drivers()) #https://towardsdatascience.com/using-odbc-to-connect-any-database-directly-to-jupyter-notebook-19741b4b748
+        print(pyodbc.drivers()) #https://towardsdatascience.com/using-odbc-to-connect-any-database-directly-to-jupyter-notebook-19741b4b748
         driver = self.config.get("driver", "{MariaSQL}")
         server = self.config["host"]
         port = str(self.config.get("port", 3306))

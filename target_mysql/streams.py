@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Union, List, Iterable
 from .singer_sdk.stream import Stream
 from datetime import datetime
+import json
 import dateutil.parser
 import logging
 import pyodbc
@@ -24,7 +25,7 @@ class MSSQLStream(Stream):
         self.cursor = self.conn.cursor()
         self.dml_sql = None
         self.batch_cache = []
-        self.batch_size = 10000 if batch_size is None else batch_size
+        self.batch_size = 1 if batch_size is None else batch_size
         self.full_table_name = self.generate_full_table_name(self.name, schema_name)
         self.temp_full_table_name = self.generate_full_table_name(f"{self.name}_temp", schema_name)
         self.table_handler()
@@ -128,10 +129,10 @@ class MSSQLStream(Stream):
                 mssqltype = "NUMERIC(19,6)"
         elif ("integer" in jsontype): mssqltype = "INT"
         elif ("boolean" in jsontype): mssqltype = "BIT"
+
+        elif ("array" in jsontype or "object" in jsontype): mssqltype = "JSON"
         #not tested
-        elif ("null" in jsontype): raise NotImplementedError("Can't set columns as null in MSSQL")
-        elif ("array" in jsontype): raise NotImplementedError("Currently haven't implemented dealing with arrays")
-        elif ("object" in jsontype): raise NotImplementedError("Currently haven't implemented dealing with objects")
+        elif ("null" in jsontype): raise NotImplementedError("Can't set columns as null in MYSQL")
         else: raise NotImplementedError(f"Haven't implemented dealing with this type of data. jsontype: {jsontype}") 
      
         return mssqltype
@@ -156,7 +157,7 @@ class MSSQLStream(Stream):
 
     def sql_runner(self, sql):
         try:
-            logging.info(f"Running SQL: {sql}")
+            # logging.info(f"Running SQL: {sql}")
             self.cursor.execute(sql)
         except Exception as e:
             logging.error(f"Caught exception whie running sql: {sql}")
@@ -174,6 +175,8 @@ class MSSQLStream(Stream):
         try:
             self.conn.autocommit = False
             self.cursor.fast_executemany = False
+            logging.info(dml)
+            logging.info(cache[0])
             self.cursor.executemany(dml, cache)
         except pyodbc.DatabaseError as e:
             # logging.error(f"Caught exception while running batch sql: {dml}. ")
@@ -227,15 +230,23 @@ class MSSQLStream(Stream):
                     val = record.get(name)
                     if (val is not None):
                         record.update({name: val[:255]})
+                elif ddl=="JSON":
+                    val = record.get(name)
+                    if (val is not None):
+                        record.update({name:json.dumps(val, default=str)})
+
         return newrecord
 
     #Not actually persisting the record yet, batching
     def persist_record(self, record):
         dml = self.record_to_dml(table_name=self.temp_full_table_name,data=record)
         #TODO don't need to generate dml every time if we can be confident the ordering and data is correct (Singer forces this?)
-        if (self.dml_sql is not None):
-            assert self.dml_sql == dml
-        else: self.dml_sql = dml
+        # logging.info(dml)
+        # logging.info(self.dml_sql)
+        # if (self.dml_sql is not None):
+        #     assert self.dml_sql == dml
+        # else: self.dml_sql = dml
+        self.dml_sql = dml
     
         #Convert data
         record = self.data_conversion(self.name_type_mapping, record)
