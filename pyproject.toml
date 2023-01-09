@@ -6,13 +6,13 @@ authors = ["Keith Siilats"]
 license = "GPL"
 
 [tool.poetry.dependencies]
-python = "<3.9,>=3.6"
+python = "<3.11,>=3.6"
 pipelinewise-singer-python = "1.2.0"
 jsonschema = "3.2.0"
 click = "^7.1.2"
 requests = "^2.25.1"
 simplejson = "3.11.1"
-pyodbc = "4.0.30"
+pyodbc = "4.0.34"
 pylint = "^2.8.2"
 python-dateutil = "2.8.1"
 
