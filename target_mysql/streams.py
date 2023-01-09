@@ -130,7 +130,7 @@ class MSSQLStream(Stream):
         elif ("integer" in jsontype): mssqltype = "INT"
         elif ("boolean" in jsontype): mssqltype = "BIT"
 
-        elif ("array" in jsontype or "object" in jsontype): mssqltype = "JSON"
+        elif ("array" in jsontype or "object" in jsontype): mssqltype = "VARCHAR(1023)"
         #not tested
         elif ("null" in jsontype): raise NotImplementedError("Can't set columns as null in MYSQL")
         else: raise NotImplementedError(f"Haven't implemented dealing with this type of data. jsontype: {jsontype}") 
@@ -230,6 +230,10 @@ class MSSQLStream(Stream):
                     val = record.get(name)
                     if (val is not None):
                         record.update({name: val[:255]})
+                elif ddl == "VARCHAR(1023)":
+                    val = record.get(name)
+                    if (val is not None):
+                        record.update({name: json.dumps(val, default=str)[:1023]})
                 elif ddl=="JSON":
                     val = record.get(name)
                     if (val is not None):
