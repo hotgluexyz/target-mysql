@@ -30,7 +30,7 @@ class TargetMSSQL(Target):
                                         server=server,
                                         port=port,
                                         uid=self.config.get("user"),
-                                        pwd=self.config.get("password"),
+                                        pwd=f'{{{self.config.get("password")}}}',
                                         database=self.config.get("database"),
                                         )
         self.conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
