@@ -77,6 +77,7 @@ class MSSQLStream(Stream):
         #Loop through all properties of stream to add them to our DDL
         first=True
         for name, shape in properties.items():
+            name = name.strip()
             mssqltype=self.ddl_json_to_mssqlmapping(shape)
             if (mssqltype is None): continue #Empty Schemas
             mssqltype=self.ddl_json_to_mssqlmapping(shape)
@@ -147,6 +148,8 @@ class MSSQLStream(Stream):
     #Columns is seperate due to data not necessairly having all of the correct columns
     def record_to_dml(self, table_name:str, data:dict) -> str:
         #TODO this is a bit gross, could refactor to make this easier to read
+        #replace empty last spaces
+        data = {x.strip(): v for x, v in data.items()}
         column_list="`,`".join(data.keys())
         sql = f"INSERT INTO {table_name} (`{column_list}`)"
 
