@@ -34,6 +34,7 @@ class TargetMSSQL(Target):
                                         database=self.config.get("database"),
                                         )
         self.conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
+        self.conn.setdecoding(pyodbc.SQL_WMETADATA, encoding='utf-16le')
         self.conn.setencoding(encoding='utf-8', ctype=pyodbc.SQL_CHAR)
         self.conn.setencoding(encoding='utf-8')
 
@@ -53,4 +54,4 @@ cli = TargetMSSQL.cli()
 
 
 if __name__ == "__main__":
-    cli
+    cli()
