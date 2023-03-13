@@ -155,11 +155,10 @@ class MSSQLStream(Stream):
         data = {x.strip(): v for x, v in data.items()}
         column_list="`,`".join(data.keys())
         sql = f"INSERT INTO {table_name} (`{column_list}`)"
-
         paramaters = self.convert_data_to_params(data.values())
         sqlparameters = ",".join(paramaters)
         sql += f" VALUES ({sqlparameters})"
-        return sql, len(data)
+        return sql
 
     def sql_runner(self, sql):
         try:
@@ -169,9 +168,7 @@ class MSSQLStream(Stream):
             logging.error(f"Caught exception whie running sql: {sql}")
             raise e
 
-    def sql_runner_withparams(self, sql, paramaters):
-        
-      
+    def sql_runner_withparams(self, sql, paramaters):         
         self.batch_cache.append(paramaters)
         if(len(self.batch_cache)>=self.batch_size):
             logging.info(f"Running batch with SQL: {sql} . Batch size: {len(self.batch_cache)}")
@@ -194,9 +191,7 @@ class MSSQLStream(Stream):
         finally:
     
             self.conn.autocommit = True #Set us back to the default of autoCommiting for other actions
-    
-    
-    
+       
     def commit_batched_data(self, dml, cache):
         try:
             self.conn.autocommit = False
@@ -269,16 +264,13 @@ class MSSQLStream(Stream):
 
     #Not actually persisting the record yet, batching
     def persist_record(self, record):
-        dml, number_cols = self.record_to_dml(table_name=self.temp_full_table_name,data=record)
         for prop in record:
             self.properties_dict[prop]= record[prop]
-
-        dml, number_cols = self.record_to_dml(table_name=self.temp_full_table_name, data=self.properties_dict)
+        dml= self.record_to_dml(table_name=self.temp_full_table_name, data=self.properties_dict)
         self.dml_sql = dml
         record = self.properties_dict
         record = self.data_conversion(self.name_type_mapping, record)
-
-        self.sql_runner_withparams(dml, tuple(record.values()), number_cols)
+        self.sql_runner_withparams(dml, tuple(record.values()))
 
     def clean_up(self):
         #Commit any batched records that are left
