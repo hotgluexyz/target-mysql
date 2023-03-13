@@ -174,23 +174,6 @@ class MSSQLStream(Stream):
             self.commit_batched_data(sql, self.batch_cache)
             self.batch_cache = [] #Get our cache ready for more!
   
-    #Commits a single record
-    def commit_data(self,dml,values):
-        try:
-            self.conn.autocommit = False
-            logging.info("Commiting a single record")
-            self.cursor.execute(dml,values)
-        except pyodbc.DatabaseError as e:
-            logging.error(f"Caught exception while running batch sql: {dml}. Parameters for sql: {values} ")
-            self.conn.rollback()
-            raise e
-        else:
-            self.conn.commit()
-            logging.info(f"Record with {dml} and {values} successfully committed")
-        finally:
-    
-            self.conn.autocommit = True #Set us back to the default of autoCommiting for other actions
-       
     def commit_batched_data(self, dml, cache):
         try:
             self.conn.autocommit = False
