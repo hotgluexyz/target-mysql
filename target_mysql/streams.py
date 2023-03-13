@@ -167,8 +167,8 @@ class MSSQLStream(Stream):
             logging.error(f"Caught exception whie running sql: {sql}")
             raise e
 
-    def sql_runner_withparams(self, sql, paramaters):         
-        self.batch_cache.append(paramaters)
+    def sql_runner_withparams(self, sql, parameters):         
+        self.batch_cache.append(parameters)
         if(len(self.batch_cache)>=self.batch_size):
             logging.info(f"Running batch with SQL: {sql} . Batch size: {len(self.batch_cache)}")
             self.commit_batched_data(sql, self.batch_cache)
