@@ -24,6 +24,7 @@ class MSSQLStream(Stream):
         #TODO Think about the right way to handle this when restructuring classes re https://pymssql.readthedocs.io/en/stable/pymssql_examples.html#important-note-about-cursors
         self.cursor = self.conn.cursor()
         self.dml_sql = None
+        self.properties_dict = {}
         self.number_cols = 0
         self.batch_cache = []
         self.batch_size = 1000 if batch_size is None else batch_size
@@ -80,6 +81,7 @@ class MSSQLStream(Stream):
         for name, shape in properties.items():
             name = name.strip()
             mssqltype=self.ddl_json_to_mssqlmapping(shape)
+            self.properties_dict[name]= None
             if (mssqltype is None): continue #Empty Schemas
             mssqltype=self.ddl_json_to_mssqlmapping(shape)
             self.name_type_mapping.update({name:mssqltype}) #TODO clunky for data conversation
@@ -167,12 +169,10 @@ class MSSQLStream(Stream):
             logging.error(f"Caught exception whie running sql: {sql}")
             raise e
 
-    def sql_runner_withparams(self, sql, paramaters, cols):
+    def sql_runner_withparams(self, sql, paramaters):
         
-        if cols < self.number_cols:   
-            self.commit_data(sql,paramaters)
-        else:
-            self.batch_cache.append(paramaters)
+      
+        self.batch_cache.append(paramaters)
         if(len(self.batch_cache)>=self.batch_size):
             logging.info(f"Running batch with SQL: {sql} . Batch size: {len(self.batch_cache)}")
             self.commit_batched_data(sql, self.batch_cache)
@@ -270,20 +270,13 @@ class MSSQLStream(Stream):
     #Not actually persisting the record yet, batching
     def persist_record(self, record):
         dml, number_cols = self.record_to_dml(table_name=self.temp_full_table_name,data=record)
-        #TODO don't need to generate dml every time if we can be confident the ordering and data is correct (Singer forces this?)
-        # logging.info(dml)
-        # logging.info(self.dml_sql)
-        # if (self.dml_sql is not None):
-        #     assert self.dml_sql == dml
-        # else: self.dml_sql = dml
-        self.dml_sql = dml
-        if number_cols >= self.number_cols:
-            self.number_cols = number_cols
-        else:
-            logging.info("The number of columns is less than expected, proceed with single insert")
-        #Convert data
-        record = self.data_conversion(self.name_type_mapping, record)
+        for prop in record:
+            self.properties_dict[prop]= record[prop]
 
+        dml, number_cols = self.record_to_dml(table_name=self.temp_full_table_name, data=self.properties_dict)
+        self.dml_sql = dml
+        record = self.properties_dict
+        record = self.data_conversion(self.name_type_mapping, record)
 
         self.sql_runner_withparams(dml, tuple(record.values()), number_cols)
 
