@@ -24,8 +24,9 @@ class MSSQLStream(Stream):
         #TODO Think about the right way to handle this when restructuring classes re https://pymssql.readthedocs.io/en/stable/pymssql_examples.html#important-note-about-cursors
         self.cursor = self.conn.cursor()
         self.dml_sql = None
+        self.properties_dict = {}
         self.batch_cache = []
-        self.batch_size = 1 if batch_size is None else batch_size
+        self.batch_size = 1000 if batch_size is None else batch_size
         self.full_table_name = self.generate_full_table_name(self.name, schema_name)
         self.temp_full_table_name = self.generate_full_table_name(f"{self.name}_temp", schema_name)
         self.table_handler()
@@ -79,6 +80,7 @@ class MSSQLStream(Stream):
         for name, shape in properties.items():
             name = name.strip()
             mssqltype=self.ddl_json_to_mssqlmapping(shape)
+            self.properties_dict[name]= None
             if (mssqltype is None): continue #Empty Schemas
             mssqltype=self.ddl_json_to_mssqlmapping(shape)
             self.name_type_mapping.update({name:mssqltype}) #TODO clunky for data conversation
@@ -152,7 +154,6 @@ class MSSQLStream(Stream):
         data = {x.strip(): v for x, v in data.items()}
         column_list="`,`".join(data.keys())
         sql = f"INSERT INTO {table_name} (`{column_list}`)"
-
         paramaters = self.convert_data_to_params(data.values())
         sqlparameters = ",".join(paramaters)
         sql += f" VALUES ({sqlparameters})"
@@ -160,20 +161,19 @@ class MSSQLStream(Stream):
 
     def sql_runner(self, sql):
         try:
-            # logging.info(f"Running SQL: {sql}")
+            logging.info(f"Running SQL: {sql}")
             self.cursor.execute(sql)
         except Exception as e:
             logging.error(f"Caught exception whie running sql: {sql}")
             raise e
 
-    def sql_runner_withparams(self, sql, paramaters):
-        self.batch_cache.append(paramaters)
+    def sql_runner_withparams(self, sql, parameters):         
+        self.batch_cache.append(parameters)
         if(len(self.batch_cache)>=self.batch_size):
             logging.info(f"Running batch with SQL: {sql} . Batch size: {len(self.batch_cache)}")
             self.commit_batched_data(sql, self.batch_cache)
             self.batch_cache = [] #Get our cache ready for more!
   
-    #This does not clear the cache that's up to you!
     def commit_batched_data(self, dml, cache):
         try:
             self.conn.autocommit = False
@@ -246,19 +246,12 @@ class MSSQLStream(Stream):
 
     #Not actually persisting the record yet, batching
     def persist_record(self, record):
-        dml = self.record_to_dml(table_name=self.temp_full_table_name,data=record)
-        #TODO don't need to generate dml every time if we can be confident the ordering and data is correct (Singer forces this?)
-        # logging.info(dml)
-        # logging.info(self.dml_sql)
-        # if (self.dml_sql is not None):
-        #     assert self.dml_sql == dml
-        # else: self.dml_sql = dml
+        for prop in record:
+            self.properties_dict[prop]= record[prop]
+        dml= self.record_to_dml(table_name=self.temp_full_table_name, data=self.properties_dict)
         self.dml_sql = dml
-    
-        #Convert data
+        record = self.properties_dict
         record = self.data_conversion(self.name_type_mapping, record)
-
-
         self.sql_runner_withparams(dml, tuple(record.values()))
 
     def clean_up(self):
