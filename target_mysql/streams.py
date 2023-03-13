@@ -25,7 +25,6 @@ class MSSQLStream(Stream):
         self.cursor = self.conn.cursor()
         self.dml_sql = None
         self.properties_dict = {}
-        self.number_cols = 0
         self.batch_cache = []
         self.batch_size = 1000 if batch_size is None else batch_size
         self.full_table_name = self.generate_full_table_name(self.name, schema_name)
