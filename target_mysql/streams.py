@@ -113,7 +113,7 @@ class MSSQLStream(Stream):
             elif(json_description == "blob"): mssqltype = f"VARBINARY(255)"
             elif(json_format == "date-time" and json_description == "date"): mssqltype = f"Date"
             elif(json_format == "date-time"): mssqltype = f"Datetime"
-            else: mssqltype = "VARCHAR(255)"
+            else: mssqltype = "TEXT"
         elif ("number" in jsontype): mssqltype = "INT"
         elif ("number2" in jsontype):
             if (json_minimum and json_maximum and json_exclusive_minimum and json_exclusive_maximum and json_multiple_of):
