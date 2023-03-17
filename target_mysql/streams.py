@@ -114,7 +114,7 @@ class MSSQLStream(Stream):
             elif(json_format == "date-time" and json_description == "date"): mssqltype = f"Date"
             elif(json_format == "date-time"): mssqltype = f"Datetime"
             else: mssqltype = "TEXT"
-        elif ("number" in jsontype): mssqltype = "INT"
+        elif ("number" in jsontype): mssqltype = "BIGINT"
         elif ("number2" in jsontype):
             if (json_minimum and json_maximum and json_exclusive_minimum and json_exclusive_maximum and json_multiple_of):
                 #https://docs.microsoft.com/en-us/sql/t-sql/data-types/decimal-and-numeric-transact-sql?view=sql-server-ver15
@@ -225,7 +225,7 @@ class MSSQLStream(Stream):
                         transformed_date = dateutil.parser.isoparse(date)
                         newdate = transformed_date.strftime("%Y-%m-%d %H:%M:%S.%f")
                         record.update({name:newdate})
-                elif ddl=="INT":
+                elif ddl=="INT" or ddl=="BIGINT":
                     val = record.get(name)
                     if (val is not None):
                         record.update({name:int(val)})
