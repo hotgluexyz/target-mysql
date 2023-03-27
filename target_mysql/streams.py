@@ -71,6 +71,7 @@ class MSSQLStream(Stream):
             #TODO Can't assume this is an INT always
             #TODO 450 is silly
             pk_type=pk_type.replace("MAX","450") #TODO hacky hacky
+            pk_type = "VARCHAR(450)" if pk_type == "TEXT" else pk_type
             sql += f"`{primary_key}` {pk_type} NOT NULL PRIMARY KEY,"
             properties.pop(primary_key, None) #Don't add the primary key to our DDL again
 
