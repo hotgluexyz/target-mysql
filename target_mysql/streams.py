@@ -164,17 +164,24 @@ class MSSQLStream(Stream):
         try:
             logging.info(f"Running SQL: {sql}")
             self.cursor.execute(sql)
+        except pyodbc.ProgrammingError as e:
+            if "already exists" in str(e):
+                logging.info(f"Existing table found, dropping table: {self.temp_full_table_name}")
+                drop_sql = f"DROP TABLE IF EXISTS {self.temp_full_table_name}"
+                self.cursor.execute(drop_sql)
+                logging.info(f"Re-running SQL: {sql}")
+                self.cursor.execute(sql)
         except Exception as e:
             logging.error(f"Caught exception whie running sql: {sql}")
             raise e
 
-    def sql_runner_withparams(self, sql, parameters):         
+    def sql_runner_withparams(self, sql, parameters):
         self.batch_cache.append(parameters)
         if(len(self.batch_cache)>=self.batch_size):
             logging.info(f"Running batch with SQL: {sql} . Batch size: {len(self.batch_cache)}")
             self.commit_batched_data(sql, self.batch_cache)
             self.batch_cache = [] #Get our cache ready for more!
-  
+
     def commit_batched_data(self, dml, cache):
         try:
             self.conn.autocommit = False
@@ -187,12 +194,18 @@ class MSSQLStream(Stream):
             logging.error(f"Caught exception while running batch sql: {dml}. Parameters for batch: {cache[0]} ")
             self.conn.rollback()
             raise e
+        except pyodbc.Error as e:
+            if e.args[0] == 'HY000':
+                logging.error(f"Caught exception while running batch sql: {dml}. Parameters for batch: {cache[0]} ")
+                logging.info("Rolling back transaction")
+                self.conn.rollback()
+                raise e
         else:
             self.conn.commit()
         finally:
             self.cursor.fast_executemany = False
             self.conn.autocommit = True #Set us back to the default of autoCommiting for other actions
-        
+
     def data_conversion(self, name_ddltype_mapping, record):
         newrecord = record
         if ("VARBINARY(max)" in name_ddltype_mapping.values() or
