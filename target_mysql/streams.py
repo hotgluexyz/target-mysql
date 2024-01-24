@@ -58,16 +58,16 @@ class MSSQLStream(Stream):
             primary_key=None
 
         properties=self.schema["properties"]
-    
+
         #TODO better system for detecting tables
-    
+
         #TODO Need be using named parameters for SQL to avoid potential injection, and to be clean
         sql = f"CREATE TABLE {table_name}("
-   
+
         #Key Properties
         #TODO can you assume only 1 primary key?
         if (primary_key):
-            pk_type=self.ddl_json_to_mssqlmapping(self.schema["properties"][primary_key])
+            pk_type=self.ddl_json_to_mssqlmapping(self.schema["properties"][primary_key], pk=True)
             #TODO Can't assume this is an INT always
             #TODO 450 is silly
             pk_type=pk_type.replace("MAX","450") #TODO hacky hacky
@@ -91,12 +91,12 @@ class MSSQLStream(Stream):
             else:
                 sql+= f", `{name}` {mssqltype}"
 
-    
+
         sql += ") ENGINE=InnoDB ROW_FORMAT=COMPRESSED ;"
         return sql
-  
+
     #TODO what happens with multiple types
-    def ddl_json_to_mssqlmapping(self, shape:dict) -> str:
+    def ddl_json_to_mssqlmapping(self, shape:dict, pk=False) -> str:
         #TODO need to prioritize which type first
         if ("type" not in shape): return None
         jsontype = shape["type"]
@@ -110,18 +110,26 @@ class MSSQLStream(Stream):
         json_multiple_of = shape.get("multipleOf", None)
         mssqltype : str = None
         if ("string" in jsontype):
-            if(json_max_length and json_max_length < 8000 and json_description != "blob"): mssqltype = f"VARCHAR({json_max_length})" 
-            elif(json_description == "blob"): mssqltype = f"VARBINARY(255)"
-            elif(json_format == "date-time" and json_description == "date"): mssqltype = f"Date"
-            elif(json_format == "date-time"): mssqltype = f"Datetime"
-            else: mssqltype = "TEXT"
-        elif ("number" in jsontype): mssqltype = "BIGINT"
+            if(json_max_length and json_max_length < 8000 and json_description != "blob"):
+                mssqltype = f"VARCHAR({json_max_length})"
+            elif(json_description == "blob"):
+                mssqltype = f"VARBINARY(255)"
+            elif(json_format == "date-time" and json_description == "date"):
+                mssqltype = f"Date"
+            elif(json_format == "date-time"):
+                mssqltype = f"Datetime"
+            elif pk:
+                mssqltype = "TEXT"
+            else:
+                mssqltype = "LONGTEXT"
+        elif ("number" in jsontype):
+            mssqltype = "BIGINT"
         elif ("number2" in jsontype):
             if (json_minimum and json_maximum and json_exclusive_minimum and json_exclusive_maximum and json_multiple_of):
                 #https://docs.microsoft.com/en-us/sql/t-sql/data-types/decimal-and-numeric-transact-sql?view=sql-server-ver15
                 #p (Precision) Total number of decimal digits
                 #s (Scale) Total number of decimal digits to the right of the decimal place
-                
+
                 max_digits_left_of_decimal = math.log10(json_maximum)
                 max_digits_right_of_decimal = -1*math.log10(json_multiple_of)
                 #percision : int = int(max_digits_left_of_decimal + max_digits_right_of_decimal)
@@ -131,14 +139,19 @@ class MSSQLStream(Stream):
                 mssqltype = f"NUMERIC({percision},{scale})"
             else:
                 mssqltype = "NUMERIC(19,6)"
-        elif ("integer" in jsontype): mssqltype = "INT"
-        elif ("boolean" in jsontype): mssqltype = "BIT"
+        elif ("integer" in jsontype):
+            mssqltype = "INT"
+        elif ("boolean" in jsontype):
+            mssqltype = "BIT"
 
-        elif ("array" in jsontype or "object" in jsontype): mssqltype = "VARCHAR(1023)"
+        elif ("array" in jsontype or "object" in jsontype):
+            mssqltype = "VARCHAR(1023)"
         #not tested
-        elif ("null" in jsontype): raise NotImplementedError("Can't set columns as null in MYSQL")
-        else: raise NotImplementedError(f"Haven't implemented dealing with this type of data. jsontype: {jsontype}") 
-     
+        elif ("null" in jsontype):
+            raise NotImplementedError("Can't set columns as null in MYSQL")
+        else:
+            raise NotImplementedError(f"Haven't implemented dealing with this type of data. jsontype: {jsontype}")
+
         return mssqltype
 
     def convert_data_to_params(self, datalist) -> list:
@@ -164,17 +177,24 @@ class MSSQLStream(Stream):
         try:
             logging.info(f"Running SQL: {sql}")
             self.cursor.execute(sql)
+        except pyodbc.ProgrammingError as e:
+            if "already exists" in str(e):
+                logging.info(f"Existing table found, dropping table: {self.temp_full_table_name}")
+                drop_sql = f"DROP TABLE IF EXISTS {self.temp_full_table_name}"
+                self.cursor.execute(drop_sql)
+                logging.info(f"Re-running SQL: {sql}")
+                self.cursor.execute(sql)
         except Exception as e:
             logging.error(f"Caught exception whie running sql: {sql}")
             raise e
 
-    def sql_runner_withparams(self, sql, parameters):         
+    def sql_runner_withparams(self, sql, parameters):
         self.batch_cache.append(parameters)
         if(len(self.batch_cache)>=self.batch_size):
             logging.info(f"Running batch with SQL: {sql} . Batch size: {len(self.batch_cache)}")
             self.commit_batched_data(sql, self.batch_cache)
             self.batch_cache = [] #Get our cache ready for more!
-  
+
     def commit_batched_data(self, dml, cache):
         try:
             self.conn.autocommit = False
@@ -187,12 +207,18 @@ class MSSQLStream(Stream):
             logging.error(f"Caught exception while running batch sql: {dml}. Parameters for batch: {cache[0]} ")
             self.conn.rollback()
             raise e
+        except pyodbc.Error as e:
+            if e.args[0] == 'HY000':
+                logging.error(f"Caught exception while running batch sql: {dml}. Parameters for batch: {cache[0]} ")
+                logging.info("Rolling back transaction")
+                self.conn.rollback()
+                raise e
         else:
             self.conn.commit()
         finally:
             self.cursor.fast_executemany = False
             self.conn.autocommit = True #Set us back to the default of autoCommiting for other actions
-        
+
     def data_conversion(self, name_ddltype_mapping, record):
         newrecord = record
         if ("VARBINARY(max)" in name_ddltype_mapping.values() or
