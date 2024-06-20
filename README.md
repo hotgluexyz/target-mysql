@@ -6,6 +6,8 @@ See here for list https://github.com/davidski/database_connections
 **Note**: While testing, there have been issues with using `mariadb-connector-odbc@3.1.13` for older versions of MySQL.
 To get around this, use `3.1.12` - [related issue](https://jira.mariadb.org/browse/ODBC-328)
 
+**Note**: This only works for FULL_TABLE syncs as the source table is dropped and replaced every run
+
 Installation instructions on Mac:
 1. `brew install mariadb`
 2. `brew services list`
