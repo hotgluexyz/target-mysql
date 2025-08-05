@@ -6,7 +6,7 @@ from datetime import datetime
 import json
 import dateutil.parser
 import logging
-import pyodbc
+import mysql.connector
 import math
 import base64
 from decimal import Decimal
@@ -157,7 +157,7 @@ class MSSQLStream(Stream):
     def convert_data_to_params(self, datalist) -> list:
         parameters = []
         for noop in datalist:
-            parameters.append("?")
+            parameters.append("%s")
         return parameters
      
     #TODO when this is batched how do you make sure the column ordering stays the same (data class probs)
@@ -177,7 +177,7 @@ class MSSQLStream(Stream):
         try:
             logging.info(f"Running SQL: {sql}")
             self.cursor.execute(sql)
-        except pyodbc.ProgrammingError as e:
+        except mysql.connector.Error as e:
             if "already exists" in str(e):
                 logging.info(f"Existing table found, dropping table: {self.temp_full_table_name}")
                 drop_sql = f"DROP TABLE IF EXISTS {self.temp_full_table_name}"
@@ -198,25 +198,17 @@ class MSSQLStream(Stream):
     def commit_batched_data(self, dml, cache):
         try:
             self.conn.autocommit = False
-            self.cursor.fast_executemany = False
             logging.info(dml)
             logging.info(cache[0])
             self.cursor.executemany(dml, cache)
-        except pyodbc.DatabaseError as e:
+        except mysql.connector.Error as e:
             # logging.error(f"Caught exception while running batch sql: {dml}. ")
             logging.error(f"Caught exception while running batch sql: {dml}. Parameters for batch: {cache[0]} ")
             self.conn.rollback()
             raise e
-        except pyodbc.Error as e:
-            if e.args[0] == 'HY000':
-                logging.error(f"Caught exception while running batch sql: {dml}. Parameters for batch: {cache[0]} ")
-                logging.info("Rolling back transaction")
-                self.conn.rollback()
-                raise e
         else:
             self.conn.commit()
         finally:
-            self.cursor.fast_executemany = False
             self.conn.autocommit = True #Set us back to the default of autoCommiting for other actions
 
     def data_conversion(self, name_ddltype_mapping, record):
@@ -273,13 +265,14 @@ class MSSQLStream(Stream):
 
     #Not actually persisting the record yet, batching
     def persist_record(self, record):
-        for prop in record:
-            self.properties_dict[prop]= record[prop]
-        dml= self.record_to_dml(table_name=self.temp_full_table_name, data=self.properties_dict)
+        # Create a fresh properties dict with all schema fields as None, then update with record values
+        current_record = {prop: None for prop in self.properties_dict}
+        current_record.update(record)
+        
+        dml= self.record_to_dml(table_name=self.temp_full_table_name, data=current_record)
         self.dml_sql = dml
-        record = self.properties_dict
-        record = self.data_conversion(self.name_type_mapping, record)
-        self.sql_runner_withparams(dml, tuple(record.values()))
+        processed_record = self.data_conversion(self.name_type_mapping, current_record)
+        self.sql_runner_withparams(dml, tuple(processed_record.values()))
 
     def clean_up(self):
         #Commit any batched records that are left
