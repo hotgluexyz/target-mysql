@@ -273,13 +273,14 @@ class MSSQLStream(Stream):
 
     #Not actually persisting the record yet, batching
     def persist_record(self, record):
-        for prop in record:
-            self.properties_dict[prop]= record[prop]
-        dml= self.record_to_dml(table_name=self.temp_full_table_name, data=self.properties_dict)
+        # Create a fresh properties dict with all schema fields as None, then update with record values
+        current_record = {prop: None for prop in self.properties_dict}
+        current_record.update(record)
+        
+        dml= self.record_to_dml(table_name=self.temp_full_table_name, data=current_record)
         self.dml_sql = dml
-        record = self.properties_dict
-        record = self.data_conversion(self.name_type_mapping, record)
-        self.sql_runner_withparams(dml, tuple(record.values()))
+        processed_record = self.data_conversion(self.name_type_mapping, current_record)
+        self.sql_runner_withparams(dml, tuple(processed_record.values()))
 
     def clean_up(self):
         #Commit any batched records that are left
@@ -295,3 +296,4 @@ class MSSQLStream(Stream):
         #Remove temp table
         sql = f"DROP TABLE IF EXISTS {self.temp_full_table_name}"
         self.sql_runner(sql)
+        
