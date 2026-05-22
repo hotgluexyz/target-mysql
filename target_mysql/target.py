@@ -18,6 +18,10 @@ class TargetMSSQL(Target):
         driver = self.config.get("driver", "{MariaSQL}")
         server = self.config["host"]
         port = str(self.config.get("port", 3306))
+        if "mysql.database.azure.com" in server:
+            pwd = self.config.get("password")
+        else:
+            pwd = f'{{{self.config.get("password")}}}'
         if (self.config.get("trusted_connection")=="yes"):
             self.conn = pyodbc.connect( driver=driver,
                                         server=server,
@@ -29,7 +33,7 @@ class TargetMSSQL(Target):
                                         server=server,
                                         port=port,
                                         uid=self.config.get("user"),
-                                        pwd=f'{{{self.config.get("password")}}}',
+                                        pwd= pwd,
                                         database=self.config.get("database"),
                                         )
         self.conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
