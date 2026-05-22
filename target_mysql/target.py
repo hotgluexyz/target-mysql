@@ -18,7 +18,7 @@ class TargetMSSQL(Target):
         driver = self.config.get("driver", "{MariaSQL}")
         server = self.config["host"]
         port = str(self.config.get("port", 3306))
-        if server.contains("mysql.database.azure.com"):
+        if "mysql.database.azure.com" in server:
             pwd = self.config.get("password")
         else:
             pwd = f'{{{self.config.get("password")}}}'
